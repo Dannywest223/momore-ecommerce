@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { Search, Filter, Heart, ShoppingBag } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Search, Filter, Heart, Grid, List, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { productsAPI, cartAPI, wishlistAPI } from "@/lib/api";
+import { productsAPI, wishlistAPI } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSocket } from "@/contexts/SocketContext";
 import { useToast } from "@/hooks/use-toast";
@@ -24,29 +24,43 @@ const Shop = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All Categories");
   const [sortBy, setSortBy] = useState("featured");
+  const [viewMode, setViewMode] = useState("grid");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { socket } = useSocket();
   const { toast } = useToast();
+  const itemsPerPage = 12;
+
+  // Get category and search query from URL
+  useEffect(() => {
+    const categoryParam = searchParams.get("category");
+    const searchQuery = searchParams.get("search");
+    
+    if (categoryParam) {
+      setSelectedCategory(categoryParam);
+    }
+    
+    if (searchQuery) {
+      setSearchTerm(searchQuery);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
+    setCurrentPage(1);
     fetchProducts();
   }, [selectedCategory, searchTerm, sortBy]);
 
   useEffect(() => {
+    fetchProducts();
+  }, [currentPage]);
+
+  useEffect(() => {
     if (socket) {
-      socket.on('productAdded', (product) => {
-        setProducts(prev => [product, ...prev]);
-      });
-
-      socket.on('productUpdated', (product) => {
-        setProducts(prev => 
-          prev.map(p => p._id === product._id ? product : p)
-        );
-      });
-
-      socket.on('productDeleted', (productId) => {
-        setProducts(prev => prev.filter(p => p._id !== productId));
-      });
+      socket.on('productAdded', () => fetchProducts());
+      socket.on('productUpdated', () => fetchProducts());
+      socket.on('productDeleted', () => fetchProducts());
 
       return () => {
         socket.off('productAdded');
@@ -62,10 +76,12 @@ const Shop = () => {
       const params = {
         category: selectedCategory !== "All Categories" ? selectedCategory : undefined,
         search: searchTerm || undefined,
+        page: currentPage,
+        limit: itemsPerPage,
       };
       
       const response = await productsAPI.getAll(params);
-      let fetchedProducts = response.data.products;
+      let fetchedProducts = response.data.products || [];
 
       // Sort products
       if (sortBy === 'price-low') {
@@ -77,6 +93,7 @@ const Shop = () => {
       }
 
       setProducts(fetchedProducts);
+      setTotalPages(Math.ceil((response.data.total || fetchedProducts.length) / itemsPerPage));
     } catch (error) {
       console.error('Error fetching products:', error);
       toast({
@@ -86,31 +103,6 @@ const Shop = () => {
       });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleAddToCart = async (productId: string) => {
-    if (!user) {
-      toast({
-        title: "Login Required",
-        description: "Please login to add items to cart",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      await cartAPI.add(productId, 1);
-      toast({
-        title: "Added to Cart",
-        description: "Product added to your cart successfully",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to add product to cart",
-        variant: "destructive",
-      });
     }
   };
 
@@ -139,123 +131,283 @@ const Shop = () => {
     }
   };
 
+  const getImageUrl = (imagePath: string) => {
+    if (!imagePath) return "https://via.placeholder.com/400x400?text=No+Image";
+    if (imagePath.startsWith('http')) return imagePath;
+    return `http://localhost:5000${imagePath}`;
+  };
+
+  // Pagination controls
+  const goToPage = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* Hero Section */}
-      <section className="bg-gradient-hero py-20">
-        <div className="container mx-auto px-4 text-center">
+    <div className="min-h-screen bg-gradient-to-b from-white to-amber-50/30">
+      {/* Hero Section - Brown Theme */}
+      <section className="relative bg-gradient-to-r from-[#3E2723] via-[#4E342E] to-[#3E2723] py-20 overflow-hidden">
+        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1920')] bg-cover bg-center opacity-10"></div>
+        <div className="container mx-auto px-4 text-center relative z-10">
+          <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-1.5 mb-4">
+            <Sparkles className="h-4 w-4 text-amber-300" />
+            <span className="text-amber-100 text-sm font-medium">COLLECTION</span>
+          </div>
           <h1 className="text-5xl md:text-6xl font-bold text-white mb-6 animate-fade-in">
             Shop Collection
           </h1>
-          <p className="text-xl text-white/90 max-w-2xl mx-auto animate-slide-up">
+          <div className="w-24 h-1 bg-gradient-to-r from-amber-400 to-amber-500 mx-auto mb-6 rounded-full"></div>
+          <p className="text-xl text-amber-100 max-w-2xl mx-auto animate-slide-up">
             Discover our curated selection of premium products
           </p>
         </div>
       </section>
 
-      {/* Filters and Search */}
-      <section className="py-8 border-b bg-background">
+      {/* Filters and Search - Brown Theme */}
+      <section className="py-6 border-b border-amber-100 bg-white shadow-sm sticky top-16 z-40">
         <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-            <div className="flex flex-col sm:flex-row gap-4 flex-1">
+          <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+            <div className="flex flex-col sm:flex-row gap-4 flex-1 w-full">
               <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-amber-500 h-4 w-4" />
                 <Input
                   placeholder="Search products..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 bg-white border-amber-200 text-gray-800 placeholder:text-gray-400 focus:border-amber-500 focus:ring-amber-500"
                 />
               </div>
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="w-full sm:w-48">
+                <SelectTrigger className="w-full sm:w-48 bg-white border-amber-200 text-gray-800">
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-white border-amber-200">
                   {categories.map((category) => (
-                    <SelectItem key={category} value={category}>
+                    <SelectItem key={category} value={category} className="hover:bg-amber-50 focus:bg-amber-50">
                       {category}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-full sm:w-48">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="featured">Featured</SelectItem>
-                <SelectItem value="price-low">Price: Low to High</SelectItem>
-                <SelectItem value="price-high">Price: High to Low</SelectItem>
-                <SelectItem value="name">Name</SelectItem>
-              </SelectContent>
-            </Select>
+            
+            <div className="flex gap-4 w-full lg:w-auto">
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-full sm:w-48 bg-white border-amber-200 text-gray-800">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent className="bg-white border-amber-200">
+                  <SelectItem value="featured" className="hover:bg-amber-50">Featured</SelectItem>
+                  <SelectItem value="price-low" className="hover:bg-amber-50">Price: Low to High</SelectItem>
+                  <SelectItem value="price-high" className="hover:bg-amber-50">Price: High to Low</SelectItem>
+                  <SelectItem value="name" className="hover:bg-amber-50">Name</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <div className="hidden sm:flex gap-2 bg-amber-50 rounded-lg p-1">
+                <Button
+                  variant={viewMode === "grid" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("grid")}
+                  className={viewMode === "grid" ? "bg-gradient-to-r from-amber-600 to-amber-700 text-white" : "text-amber-600 hover:text-amber-700"}
+                >
+                  <Grid className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === "list" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("list")}
+                  className={viewMode === "list" ? "bg-gradient-to-r from-amber-600 to-amber-700 text-white" : "text-amber-600 hover:text-amber-700"}
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Products Grid */}
-      <section className="py-16">
+      {/* Products Grid/List */}
+      <section className="py-12">
         <div className="container mx-auto px-4">
           {loading ? (
             <div className="text-center py-16">
-              <p className="text-xl text-muted-foreground">Loading products...</p>
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mb-4"></div>
+              <p className="text-xl text-gray-500">Loading products...</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-              {products.map((product, index) => (
-              <Card
-                key={product._id}
-                className="card-hover group border-0 shadow-medium overflow-hidden animate-fade-in"
-                style={{ animationDelay: `${index * 0.1}s` }}
-              >
-                <div className="relative overflow-hidden">
-                  <Link to={`/product/${product._id}`}>
-                    <img
-                      src={`http://localhost:5000${product.images[0]}`}
-                      alt={product.name}
-                      className="w-full h-64 object-cover transition-transform duration-700 group-hover:scale-110"
-                    />
-                  </Link>
-                  <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="bg-white/90 text-primary hover:bg-white hover:text-primary mb-2"
-                      onClick={() => handleAddToWishlist(product._id)}
+            <>
+              <div className={
+                viewMode === "grid" 
+                  ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+                  : "space-y-4"
+              }>
+                {products.map((product, index) => (
+                  viewMode === "grid" ? (
+                    <Card
+                      key={product._id}
+                      className="group bg-white border border-amber-100 hover:shadow-xl transition-all duration-300 overflow-hidden rounded-xl hover:-translate-y-1"
                     >
-                      <Heart className="h-5 w-5" />
-                    </Button>
-                  </div>
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <div className="absolute bottom-4 left-4 right-4 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-4 group-hover:translate-y-0">
-                    <Button 
-                      className="w-full bg-white text-primary hover:bg-white/90"
-                      onClick={() => handleAddToCart(product._id)}
+                      <div className="relative overflow-hidden bg-gradient-to-br from-amber-50 to-white">
+                        <Link to={`/product/${product._id}`}>
+                          <img
+                            src={getImageUrl(product.images?.[0])}
+                            alt={product.name}
+                            className="w-full h-64 object-cover transition-transform duration-700 group-hover:scale-110"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = "https://via.placeholder.com/400x400?text=Product";
+                            }}
+                          />
+                        </Link>
+                        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="bg-white/90 text-amber-600 hover:bg-amber-600 hover:text-white rounded-full shadow-md"
+                            onClick={() => handleAddToWishlist(product._id)}
+                          >
+                            <Heart className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        {product.featured && (
+                          <div className="absolute top-3 left-3 bg-gradient-to-r from-amber-600 to-amber-700 text-white text-xs px-2 py-1 rounded-full">
+                            Featured
+                          </div>
+                        )}
+                      </div>
+                      <CardContent className="p-4">
+                        <p className="text-xs text-amber-600 font-medium mb-1">{product.category}</p>
+                        <Link to={`/product/${product._id}`}>
+                          <h3 className="text-lg font-semibold text-gray-800 mb-2 hover:text-amber-600 transition-colors line-clamp-1">
+                            {product.name}
+                          </h3>
+                        </Link>
+                        <p className="text-sm text-gray-500 mb-3 line-clamp-2">{product.description}</p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-2xl font-bold text-amber-600">${product.price}</p>
+                          {product.inStock ? (
+                            <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">In Stock</span>
+                          ) : (
+                            <span className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded-full">Out of Stock</span>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    // List View
+                    <div
+                      key={product._id}
+                      className="flex flex-col sm:flex-row gap-4 bg-white rounded-xl p-4 border border-amber-100 hover:shadow-lg transition-all duration-300"
                     >
-                      <ShoppingBag className="h-4 w-4 mr-2" />
-                      Add to Cart
-                    </Button>
+                      <Link to={`/product/${product._id}`} className="sm:w-40 h-40 flex-shrink-0">
+                        <img
+                          src={getImageUrl(product.images?.[0])}
+                          alt={product.name}
+                          className="w-full h-full object-cover rounded-lg"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = "https://via.placeholder.com/160x160?text=Product";
+                          }}
+                        />
+                      </Link>
+                      <div className="flex-1 flex flex-col">
+                        <p className="text-amber-600 text-xs font-medium mb-1">{product.category}</p>
+                        <Link to={`/product/${product._id}`}>
+                          <h3 className="text-xl font-semibold text-gray-800 mb-2 hover:text-amber-600 transition-colors">
+                            {product.name}
+                          </h3>
+                        </Link>
+                        <p className="text-gray-500 text-sm mb-3 line-clamp-2">{product.description}</p>
+                        <div className="flex items-center justify-between mt-auto">
+                          <p className="text-2xl font-bold text-amber-600">${product.price}</p>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleAddToWishlist(product._id)}
+                              className="border-amber-200 text-amber-600 hover:bg-amber-50 rounded-full"
+                            >
+                              <Heart className="h-4 w-4 mr-2" />
+                              Wishlist
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                ))}
+              </div>
+
+              {/* Pagination - Brown Theme */}
+              {totalPages > 1 && (
+                <div className="flex justify-center items-center gap-2 mt-12">
+                  <Button
+                    variant="outline"
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="border-amber-200 text-amber-600 hover:bg-amber-50 rounded-full"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Previous
+                  </Button>
+                  
+                  <div className="flex gap-2">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={currentPage === pageNum ? "default" : "outline"}
+                          onClick={() => goToPage(pageNum)}
+                          className={currentPage === pageNum 
+                            ? "bg-gradient-to-r from-amber-600 to-amber-700 text-white hover:from-amber-700 hover:to-amber-800 rounded-full" 
+                            : "border-amber-200 text-amber-600 hover:bg-amber-50 rounded-full"
+                          }
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    })}
                   </div>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="border-amber-200 text-amber-600 hover:bg-amber-50 rounded-full"
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4 ml-2" />
+                  </Button>
                 </div>
-                <CardContent className="p-6">
-                  <p className="text-sm text-accent font-medium mb-2">{product.category}</p>
-                  <Link to={`/product/${product._id}`}>
-                    <h3 className="text-lg font-semibold text-foreground mb-3 group-hover:text-primary transition-colors">
-                      {product.name}
-                    </h3>
-                  </Link>
-                  <p className="text-xl font-bold text-primary">${product.price}</p>
-                </CardContent>
-              </Card>
-            ))}
-            </div>
+              )}
+            </>
           )}
           
           {!loading && products.length === 0 && (
             <div className="text-center py-16">
-              <p className="text-xl text-muted-foreground">No products found matching your criteria.</p>
+              <div className="text-6xl mb-4">🔍</div>
+              <p className="text-xl text-gray-500 mb-2">No products found matching your criteria.</p>
+              <p className="text-gray-400">Try adjusting your search or filter settings</p>
+              <Button 
+                onClick={() => {
+                  setSearchTerm("");
+                  setSelectedCategory("All Categories");
+                  setSortBy("featured");
+                }}
+                className="mt-6 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white rounded-full"
+              >
+                Clear Filters
+              </Button>
             </div>
           )}
         </div>

@@ -37,6 +37,7 @@ export const authAPI = {
   register: (userData: any) => api.post('/auth/register', userData),
   login: (credentials: any) => api.post('/auth/login', credentials),
   getCurrentUser: () => api.get('/auth/me'),
+  adminCodeLogin: (accessCode: string) => api.post('/auth/admin/code-login', { accessCode }),
 };
 
 // Products API

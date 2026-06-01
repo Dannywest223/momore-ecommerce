@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Heart, ShoppingBag } from "lucide-react";
+import { Heart, ShoppingBag, Sparkles, ArrowRight, Star, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -106,17 +106,19 @@ const FeaturedProducts = () => {
     }
   };
 
+  const getImageUrl = (imagePath: string) => {
+    if (!imagePath) return "https://via.placeholder.com/400x400?text=No+Image";
+    if (imagePath.startsWith('http')) return imagePath;
+    return `http://localhost:5000${imagePath}`;
+  };
+
   if (loading) {
     return (
-      <section className="py-20 bg-background">
+      <section className="py-20 bg-gradient-to-b from-white to-amber-50/30">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
-              Featured Products
-            </h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Loading our featured products...
-            </p>
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mb-4"></div>
+            <p className="text-xl text-[#5D4037]/70">Loading featured products...</p>
           </div>
         </div>
       </section>
@@ -124,70 +126,151 @@ const FeaturedProducts = () => {
   }
 
   return (
-    <section className="py-20 bg-background">
+    <section className="py-16 bg-gradient-to-b from-white to-amber-50/30">
       <div className="container mx-auto px-4">
-        <div className="text-center mb-16 animate-fade-in">
-          <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center gap-2 bg-amber-100 rounded-full px-4 py-1.5 mb-4">
+            <Sparkles className="h-4 w-4 text-amber-600" />
+            <span className="text-amber-700 text-sm font-medium">BEST SELLERS</span>
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold text-[#3E2723] mb-3">
             Featured Products
           </h2>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          <div className="w-20 h-1 bg-gradient-to-r from-amber-500 to-amber-600 mx-auto rounded-full"></div>
+          <p className="text-[#5D4037]/70 max-w-2xl mx-auto mt-4">
             Discover our carefully curated selection of premium products
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {featuredProducts.map((product, index) => (
+        {/* Products Grid - Amazon Style */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {featuredProducts.map((product) => (
             <Card
               key={product._id}
-              className="card-hover group border-0 shadow-medium overflow-hidden"
-              style={{ animationDelay: `${index * 0.1}s` }}
+              className="group bg-white border border-gray-100 hover:border-amber-200 hover:shadow-xl transition-all duration-300 overflow-hidden rounded-xl h-full flex flex-col"
             >
-              <div className="relative overflow-hidden">
-                <Link to={`/product/${product._id}`}>
-                  <img
-                    src={`http://localhost:5000${product.images[0]}`}
-                    alt={product.name}
-                    className="w-full h-80 object-cover transition-transform duration-700 group-hover:scale-110"
-                  />
+              {/* Image Container - Amazon style with full image visibility */}
+              <div className="relative bg-gradient-to-br from-amber-50 to-white p-6">
+                <Link to={`/product/${product._id}`} className="block">
+                  <div className="aspect-square w-full overflow-hidden rounded-lg">
+                    <img
+                      src={getImageUrl(product.images?.[0])}
+                      alt={product.name}
+                      className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "https://via.placeholder.com/400x400?text=Product";
+                      }}
+                    />
+                  </div>
                 </Link>
-                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                
+                {/* Quick View Button (Amazon style) */}
+                <div className="absolute inset-x-0 bottom-0 translate-y-full group-hover:translate-y-0 transition-transform duration-300 bg-gradient-to-t from-black/70 to-transparent pt-8 pb-3">
                   <Button
-                    variant="ghost"
-                    size="icon"
-                    className="bg-white/90 text-primary hover:bg-white hover:text-primary mb-2"
-                    onClick={() => handleAddToWishlist(product._id)}
+                    variant="default"
+                    size="sm"
+                    className="w-11/12 mx-auto block bg-white text-[#3E2723] hover:bg-amber-500 hover:text-white rounded-full text-xs"
+                    asChild
                   >
-                    <Heart className="h-5 w-5" />
+                    <Link to={`/product/${product._id}`}>
+                      <Eye className="h-3 w-3 mr-1" />
+                      Quick View
+                    </Link>
                   </Button>
                 </div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                <div className="absolute bottom-4 left-4 right-4 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-4 group-hover:translate-y-0">
-                  <Button 
-                    className="w-full bg-white text-primary hover:bg-white/90"
-                    onClick={() => handleAddToCart(product._id)}
-                  >
-                    <ShoppingBag className="h-4 w-4 mr-2" />
-                    Add to Cart
-                  </Button>
-                </div>
+                
+                {/* Wishlist Button */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute top-2 right-2 bg-white/90 hover:bg-amber-500 text-amber-500 hover:text-white rounded-full shadow-sm h-8 w-8 transition-all duration-300 opacity-0 group-hover:opacity-100"
+                  onClick={() => handleAddToWishlist(product._id)}
+                >
+                  <Heart className="h-4 w-4" />
+                </Button>
+                
+                {/* Featured Badge */}
+                {product.featured && (
+                  <div className="absolute top-2 left-2 bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full">
+                    Featured
+                  </div>
+                )}
               </div>
-              <CardContent className="p-6">
-                <p className="text-sm text-accent font-medium mb-2">{product.category}</p>
+              
+              {/* Content - Amazon Style */}
+              <CardContent className="p-4 flex-grow flex flex-col space-y-2">
+                {/* Category */}
+                <p className="text-xs text-amber-600 font-medium uppercase tracking-wider">
+                  {product.category}
+                </p>
+                
+                {/* Product Name */}
                 <Link to={`/product/${product._id}`}>
-                  <h3 className="text-xl font-semibold text-foreground mb-3 group-hover:text-primary transition-colors">
+                  <h3 className="font-semibold text-[#3E2723] text-sm hover:text-amber-600 transition-colors line-clamp-2 min-h-[40px]">
                     {product.name}
                   </h3>
                 </Link>
-                <p className="text-2xl font-bold text-primary">${product.price}</p>
+                
+                {/* Rating (Amazon style) */}
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="h-3 w-3 fill-amber-400 text-amber-400" />
+                    ))}
+                  </div>
+                  <span className="text-xs text-gray-500">(128 reviews)</span>
+                </div>
+                
+                {/* Price */}
+                <div className="flex items-baseline gap-1">
+                  <span className="text-xs text-gray-500">$</span>
+                  <span className="text-xl font-bold text-amber-600">{product.price}</span>
+                </div>
+                
+                {/* Stock Status */}
+                {product.inStock && product.stockQuantity > 0 ? (
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                    <p className="text-xs text-green-600">
+                      In Stock - {product.stockQuantity} left
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                    <p className="text-xs text-red-500">Out of Stock</p>
+                  </div>
+                )}
+                
+                {/* Free Shipping Badge */}
+                <p className="text-xs text-amber-600 font-medium mt-1">
+                  FREE Shipping
+                </p>
+                
+                {/* Add to Cart Button */}
+                <Button 
+                  className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-lg py-2 h-auto text-sm font-medium transition-all duration-300 mt-3"
+                  onClick={() => handleAddToCart(product._id)}
+                  disabled={!product.inStock}
+                >
+                  <ShoppingBag className="h-3.5 w-3.5 mr-2" />
+                  {product.inStock ? "Add to Cart" : "Out of Stock"}
+                </Button>
               </CardContent>
             </Card>
           ))}
         </div>
 
+        {/* View All Button */}
         <div className="text-center mt-12">
-          <Button className="btn-hero-primary" asChild>
-            <Link to="/shop">
-            View All Products
+          <Button 
+            className="bg-transparent border-2 border-amber-500 text-amber-600 hover:bg-amber-500 hover:text-white rounded-full px-8 py-2 transition-all duration-300"
+            asChild
+          >
+            <Link to="/shop" className="flex items-center gap-2">
+              View All Products
+              <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
         </div>

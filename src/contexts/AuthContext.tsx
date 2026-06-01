@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authAPI } from '@/lib/api';
+import api from '@/lib/api';
 
 interface User {
   id: string;
@@ -13,6 +14,7 @@ interface AuthContextType {
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
+  adminLogin: (accessCode: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
 }
@@ -87,6 +89,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // New admin login with access code
+  const adminLogin = async (accessCode: string) => {
+    try {
+      const response = await api.post('/auth/admin/code-login', { accessCode });
+      const { token: newToken, user: newUser } = response.data;
+
+      setToken(newToken);
+      setUser(newUser);
+      localStorage.setItem('token', newToken);
+      localStorage.setItem('user', JSON.stringify(newUser));
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Invalid access code');
+    }
+  };
+
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -99,6 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     token,
     login,
     register,
+    adminLogin,
     logout,
     loading,
   };
