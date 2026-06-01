@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { Heart, ShoppingBag, Sparkles, ArrowRight, Star, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { productsAPI, cartAPI, wishlistAPI } from "@/lib/api";
+import { productsAPI, cartAPI, wishlistAPI, getAllLocalProducts } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSocket } from "@/contexts/SocketContext";
 import { useToast } from "@/hooks/use-toast";
@@ -15,27 +14,30 @@ const FeaturedProducts = () => {
   const { socket } = useSocket();
   const { toast } = useToast();
 
+  // Fallback image
+  const FALLBACK_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='500' height='500' viewBox='0 0 500 500'%3E%3Crect width='500' height='500' fill='%23f3f4f6'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%239ca3af' font-size='14'%3ENo Image%3C/text%3E%3C/svg%3E";
+
+  // Function to check if image URL is valid
+  const isValidImageUrl = (url: string) => {
+    if (!url) return false;
+    if (url.startsWith('data:')) return true;
+    if (url.startsWith('http')) return true;
+    if (url.includes('blob:')) return true;
+    if (url.startsWith('/src/assets/')) return true;
+    // Check if it's a local image name pattern
+    if (url.match(/^[a-zA-Z0-9_-]+\.(jpeg|jpg|png|gif)$/i)) return true;
+    return false;
+  };
+
   useEffect(() => {
     fetchFeaturedProducts();
   }, []);
 
   useEffect(() => {
     if (socket) {
-      socket.on('productAdded', (product) => {
-        if (product.featured) {
-          setFeaturedProducts(prev => [product, ...prev].slice(0, 6));
-        }
-      });
-
-      socket.on('productUpdated', (product) => {
-        setFeaturedProducts(prev => 
-          prev.map(p => p._id === product._id ? product : p)
-        );
-      });
-
-      socket.on('productDeleted', (productId) => {
-        setFeaturedProducts(prev => prev.filter(p => p._id !== productId));
-      });
+      socket.on('productAdded', () => fetchFeaturedProducts());
+      socket.on('productUpdated', () => fetchFeaturedProducts());
+      socket.on('productDeleted', () => fetchFeaturedProducts());
 
       return () => {
         socket.off('productAdded');
@@ -47,10 +49,17 @@ const FeaturedProducts = () => {
 
   const fetchFeaturedProducts = async () => {
     try {
-      const response = await productsAPI.getFeatured();
-      setFeaturedProducts(response.data);
+      setLoading(true);
+      
+      // ONLY use local products (these always have working images)
+      const localProducts = getAllLocalProducts();
+      const localFeatured = localProducts.filter(p => p.featured).slice(0, 10);
+      
+      setFeaturedProducts(localFeatured);
     } catch (error) {
       console.error('Error fetching featured products:', error);
+      const localProducts = getAllLocalProducts();
+      setFeaturedProducts(localProducts.filter(p => p.featured).slice(0, 10));
     } finally {
       setLoading(false);
     }
@@ -107,26 +116,45 @@ const FeaturedProducts = () => {
   };
 
   const getImageUrl = (imagePath: string) => {
-    if (!imagePath) return "https://via.placeholder.com/400x400?text=No+Image";
+    if (!imagePath) return FALLBACK_IMAGE;
     if (imagePath.startsWith('http')) return imagePath;
-    return `https://momorebackend.onrender.com${imagePath}`;
+    if (imagePath.startsWith('data:')) return imagePath;
+    if (imagePath.includes('blob:')) return imagePath;
+    if (imagePath.startsWith('/src/assets/')) return imagePath;
+    // For local images with just filename
+    if (imagePath.match(/^[a-zA-Z0-9_-]+\.(jpeg|jpg|png|gif)$/i)) {
+      try {
+        return new URL(`../assets/${imagePath}`, import.meta.url).href;
+      } catch (e) {
+        return FALLBACK_IMAGE;
+      }
+    }
+    return FALLBACK_IMAGE;
   };
 
   if (loading) {
     return (
-      <section className="py-20 bg-gradient-to-b from-white to-amber-50/30">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mb-4"></div>
-            <p className="text-xl text-[#5D4037]/70">Loading featured products...</p>
-          </div>
+      <div className="bg-gradient-to-b from-white to-amber-50/30 py-16">
+        <div className="container mx-auto px-4 text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600"></div>
+          <p className="text-[#5D4037]/70 mt-4">Loading featured products...</p>
         </div>
-      </section>
+      </div>
+    );
+  }
+
+  if (featuredProducts.length === 0) {
+    return (
+      <div className="bg-gradient-to-b from-white to-amber-50/30 py-16">
+        <div className="container mx-auto px-4 text-center">
+          <p className="text-[#5D4037]/70">No featured products available.</p>
+        </div>
+      </div>
     );
   }
 
   return (
-    <section className="py-16 bg-gradient-to-b from-white to-amber-50/30">
+    <div className="py-12 bg-gradient-to-b from-white to-amber-50/30">
       <div className="container mx-auto px-4">
         {/* Header */}
         <div className="text-center mb-12">
@@ -143,122 +171,82 @@ const FeaturedProducts = () => {
           </p>
         </div>
 
-        {/* Products Grid - Amazon Style */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {featuredProducts.map((product) => (
-            <Card
-              key={product._id}
-              className="group bg-white border border-gray-100 hover:border-amber-200 hover:shadow-xl transition-all duration-300 overflow-hidden rounded-xl h-full flex flex-col"
-            >
-              {/* Image Container - Amazon style with full image visibility */}
-              <div className="relative bg-gradient-to-br from-amber-50 to-white p-6">
-                <Link to={`/product/${product._id}`} className="block">
-                  <div className="aspect-square w-full overflow-hidden rounded-lg">
-                    <img
-                      src={getImageUrl(product.images?.[0])}
-                      alt={product.name}
-                      className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = "https://via.placeholder.com/400x400?text=Product";
-                      }}
-                    />
-                  </div>
-                </Link>
-                
-                {/* Quick View Button (Amazon style) */}
-                <div className="absolute inset-x-0 bottom-0 translate-y-full group-hover:translate-y-0 transition-transform duration-300 bg-gradient-to-t from-black/70 to-transparent pt-8 pb-3">
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="w-11/12 mx-auto block bg-white text-[#3E2723] hover:bg-amber-500 hover:text-white rounded-full text-xs"
-                    asChild
-                  >
-                    <Link to={`/product/${product._id}`}>
-                      <Eye className="h-3 w-3 mr-1" />
-                      Quick View
-                    </Link>
-                  </Button>
+        {/* Amazon-style Product Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
+          {featuredProducts.map((product, idx) => (
+            <div key={product._id || idx} className="group relative pb-4">
+              {/* Product Image */}
+              <Link to={`/product/${product._id}`} className="block">
+                <div className="bg-white border border-amber-100 rounded-md overflow-hidden">
+                  <img
+                    src={getImageUrl(product.images?.[0])}
+                    alt={product.name}
+                    className="w-full aspect-square object-contain p-6 hover:scale-105 transition-transform duration-300"
+                    loading="lazy"
+                    onError={(e) => {
+                      console.log(`Failed to load image for: ${product.name} - using fallback`);
+                      (e.target as HTMLImageElement).src = FALLBACK_IMAGE;
+                    }}
+                  />
                 </div>
-                
-                {/* Wishlist Button */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute top-2 right-2 bg-white/90 hover:bg-amber-500 text-amber-500 hover:text-white rounded-full shadow-sm h-8 w-8 transition-all duration-300 opacity-0 group-hover:opacity-100"
-                  onClick={() => handleAddToWishlist(product._id)}
-                >
-                  <Heart className="h-4 w-4" />
-                </Button>
-                
-                {/* Featured Badge */}
-                {product.featured && (
-                  <div className="absolute top-2 left-2 bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full">
-                    Featured
-                  </div>
-                )}
-              </div>
-              
-              {/* Content - Amazon Style */}
-              <CardContent className="p-4 flex-grow flex flex-col space-y-2">
-                {/* Category */}
-                <p className="text-xs text-amber-600 font-medium uppercase tracking-wider">
-                  {product.category}
-                </p>
-                
-                {/* Product Name */}
+              </Link>
+
+              {/* Wishlist Button */}
+              <button
+                onClick={() => handleAddToWishlist(product._id)}
+                className="absolute top-2 right-2 bg-white rounded-full p-2 shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-amber-50"
+              >
+                <Heart className="h-4 w-4 text-gray-500 hover:text-amber-600" />
+              </button>
+
+              {/* Product Info */}
+              <div className="mt-3 space-y-1">
+                <p className="text-xs text-amber-600 font-medium">{product.category}</p>
+
                 <Link to={`/product/${product._id}`}>
-                  <h3 className="font-semibold text-[#3E2723] text-sm hover:text-amber-600 transition-colors line-clamp-2 min-h-[40px]">
+                  <h3 className="text-sm font-medium text-[#3E2723] hover:text-amber-600 line-clamp-2 min-h-[40px]">
                     {product.name}
                   </h3>
                 </Link>
-                
-                {/* Rating (Amazon style) */}
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="h-3 w-3 fill-amber-400 text-amber-400" />
-                    ))}
+
+                {/* Rating Stars */}
+                <div className="flex items-center gap-1">
+                  <div className="flex text-amber-400">
+                    <Star className="h-3.5 w-3.5 fill-current" />
+                    <Star className="h-3.5 w-3.5 fill-current" />
+                    <Star className="h-3.5 w-3.5 fill-current" />
+                    <Star className="h-3.5 w-3.5 fill-current" />
+                    <Star className="h-3.5 w-3.5 text-gray-300" />
                   </div>
-                  <span className="text-xs text-gray-500">(128 reviews)</span>
+                  <span className="text-xs text-[#5D4037]/70">(124)</span>
                 </div>
-                
+
                 {/* Price */}
                 <div className="flex items-baseline gap-1">
-                  <span className="text-xs text-gray-500">$</span>
-                  <span className="text-xl font-bold text-amber-600">{product.price}</span>
+                  <span className="text-xs text-[#5D4037]/70">$</span>
+                  <span className="text-lg font-bold text-amber-600">{product.price}</span>
                 </div>
-                
+
                 {/* Stock Status */}
                 {product.inStock && product.stockQuantity > 0 ? (
-                  <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                    <p className="text-xs text-green-600">
-                      In Stock - {product.stockQuantity} left
-                    </p>
-                  </div>
+                  <p className="text-xs text-green-600">In Stock</p>
                 ) : (
-                  <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                    <p className="text-xs text-red-500">Out of Stock</p>
-                  </div>
+                  <p className="text-xs text-red-500">Out of Stock</p>
                 )}
-                
-                {/* Free Shipping Badge */}
-                <p className="text-xs text-amber-600 font-medium mt-1">
-                  FREE Shipping
-                </p>
-                
+
+                {/* Free Shipping */}
+                <p className="text-xs text-amber-600 font-medium">FREE Shipping</p>
+
                 {/* Add to Cart Button */}
-                <Button 
-                  className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-lg py-2 h-auto text-sm font-medium transition-all duration-300 mt-3"
+                <button
                   onClick={() => handleAddToCart(product._id)}
                   disabled={!product.inStock}
+                  className="w-full bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-medium text-sm py-2 rounded-full transition-all duration-300 mt-3 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  <ShoppingBag className="h-3.5 w-3.5 mr-2" />
                   {product.inStock ? "Add to Cart" : "Out of Stock"}
-                </Button>
-              </CardContent>
-            </Card>
+                </button>
+              </div>
+            </div>
           ))}
         </div>
 
@@ -275,7 +263,7 @@ const FeaturedProducts = () => {
           </Button>
         </div>
       </div>
-    </section>
+    </div>
   );
 };
 

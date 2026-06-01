@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Edit, Trash2, Eye, Upload, X, Loader2, Package, TrendingUp, ShoppingBag, DollarSign, Users, Image } from "lucide-react";
+import { Plus, Edit, Trash2, Eye, Upload, X, Loader2, Package, TrendingUp, ShoppingBag, DollarSign, Users, Image, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,6 +42,7 @@ import {
 } from "recharts";
 
 const categories = ["Clothing", "Bags & Accessories", "Homeware", "Art & Decor", "Beauty Products", "Jewelry"];
+const ITEMS_PER_PAGE = 12;
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -56,6 +57,15 @@ const AdminDashboard = () => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState("database");
+  
+  // Pagination states for Database products
+  const [dbCurrentPage, setDbCurrentPage] = useState(1);
+  const [dbTotalPages, setDbTotalPages] = useState(1);
+  
+  // Pagination states for Local products
+  const [localCurrentPage, setLocalCurrentPage] = useState(1);
+  const [localTotalPages, setLocalTotalPages] = useState(1);
+  
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -78,7 +88,21 @@ const AdminDashboard = () => {
   const lowStockProducts = products.filter(p => p.stockQuantity > 0 && p.stockQuantity < 10).length;
   const outOfStockProducts = products.filter(p => p.stockQuantity === 0).length;
 
-  // Calculate real category distribution (database only)
+  // Get paginated database products
+  const getPaginatedDbProducts = () => {
+    const start = (dbCurrentPage - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    return products.slice(start, end);
+  };
+
+  // Get paginated local products
+  const getPaginatedLocalProducts = () => {
+    const start = (localCurrentPage - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    return localProducts.slice(start, end);
+  };
+
+  // Calculate category distribution (database only)
   const getCategoryDistribution = () => {
     const categoryCount = {};
     products.forEach(product => {
@@ -104,6 +128,21 @@ const AdminDashboard = () => {
     fetchLocalProducts();
     fetchUsers();
   }, [user, navigate]);
+
+  // Reset page when tab changes
+  useEffect(() => {
+    setDbCurrentPage(1);
+    setLocalCurrentPage(1);
+  }, [activeTab]);
+
+  // Update total pages when products change
+  useEffect(() => {
+    setDbTotalPages(Math.ceil(products.length / ITEMS_PER_PAGE));
+  }, [products]);
+
+  useEffect(() => {
+    setLocalTotalPages(Math.ceil(localProducts.length / ITEMS_PER_PAGE));
+  }, [localProducts]);
 
   useEffect(() => {
     if (socket) {
@@ -265,15 +304,13 @@ const AdminDashboard = () => {
     if (window.confirm('Are you sure you want to delete this product?')) {
       try {
         if (isLocal) {
-          // Delete local product from localStorage
           deleteLocalProduct(productId);
           toast({
             title: "Local Product Deleted",
             description: "Product removed from local storage",
           });
-          fetchLocalProducts(); // Refresh local products list
+          fetchLocalProducts();
         } else {
-          // Delete database product
           await productsAPI.delete(productId);
           toast({
             title: "Product Deleted",
@@ -296,6 +333,67 @@ const AdminDashboard = () => {
     if (imagePath.startsWith('http')) return imagePath;
     if (isLocal || imagePath.includes('blob:')) return imagePath;
     return `https://momorebackend.onrender.com${imagePath}`;
+  };
+
+  // Pagination component
+  const Pagination = ({ currentPage, totalPages, onPageChange }: { currentPage: number; totalPages: number; onPageChange: (page: number) => void }) => {
+    if (totalPages <= 1) return null;
+    
+    const getPageNumbers = () => {
+      const pages = [];
+      const maxVisible = 5;
+      let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+      let end = Math.min(totalPages, start + maxVisible - 1);
+      
+      if (end - start + 1 < maxVisible) {
+        start = Math.max(1, end - maxVisible + 1);
+      }
+      
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+      return pages;
+    };
+
+    return (
+      <div className="flex justify-center items-center gap-2 mt-8 flex-wrap">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="border-amber-200 text-amber-600 hover:bg-amber-50 rounded-full"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Previous
+        </Button>
+        
+        {getPageNumbers().map(page => (
+          <Button
+            key={page}
+            variant={currentPage === page ? "default" : "outline"}
+            onClick={() => onPageChange(page)}
+            className={currentPage === page 
+              ? "bg-gradient-to-r from-amber-600 to-amber-700 text-white rounded-full" 
+              : "border-amber-200 text-amber-600 hover:bg-amber-50 rounded-full"
+            }
+          >
+            {page}
+          </Button>
+        ))}
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="border-amber-200 text-amber-600 hover:bg-amber-50 rounded-full"
+        >
+          Next
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    );
   };
 
   const categoryDistribution = getCategoryDistribution();
@@ -696,75 +794,84 @@ const AdminDashboard = () => {
                 <p className="text-gray-500">Loading products...</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {products.map((product) => (
-                  <Card key={product._id} className="group border-0 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden rounded-2xl">
-                    <div className="relative overflow-hidden bg-gradient-to-br from-amber-50 to-white">
-                      <div className="aspect-square overflow-hidden">
-                        <img
-                          src={getImageUrl(product.images?.[0])}
-                          alt={product.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = "https://via.placeholder.com/400x400?text=No+Image";
-                          }}
-                        />
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {getPaginatedDbProducts().map((product) => (
+                    <Card key={product._id} className="group border-0 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden rounded-2xl">
+                      <div className="relative overflow-hidden bg-gradient-to-br from-amber-50 to-white">
+                        <div className="aspect-square overflow-hidden">
+                          <img
+                            src={getImageUrl(product.images?.[0])}
+                            alt={product.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = "https://via.placeholder.com/400x400?text=No+Image";
+                            }}
+                          />
+                        </div>
+                        {product.featured && (
+                          <Badge className="absolute top-3 left-3 bg-gradient-to-r from-amber-600 to-amber-700 text-white border-0 shadow-md">
+                            Featured
+                          </Badge>
+                        )}
+                        <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                          <Button
+                            variant="default"
+                            size="icon"
+                            onClick={() => handleEdit(product)}
+                            className="h-8 w-8 bg-white hover:bg-amber-50 text-amber-600 shadow-md rounded-full"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="default"
+                            size="icon"
+                            onClick={() => handleDelete(product._id, false)}
+                            className="h-8 w-8 bg-white hover:bg-red-50 text-red-500 shadow-md rounded-full"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      {product.featured && (
-                        <Badge className="absolute top-3 left-3 bg-gradient-to-r from-amber-600 to-amber-700 text-white border-0 shadow-md">
-                          Featured
+                      <CardContent className="p-5">
+                        <Badge variant="secondary" className="mb-2 bg-amber-100 text-amber-700 hover:bg-amber-100 border-0 rounded-full">
+                          {product.category}
                         </Badge>
-                      )}
-                      <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <Button
-                          variant="default"
-                          size="icon"
-                          onClick={() => handleEdit(product)}
-                          className="h-8 w-8 bg-white hover:bg-amber-50 text-amber-600 shadow-md rounded-full"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="default"
-                          size="icon"
-                          onClick={() => handleDelete(product._id, false)}
-                          className="h-8 w-8 bg-white hover:bg-red-50 text-red-500 shadow-md rounded-full"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    <CardContent className="p-5">
-                      <Badge variant="secondary" className="mb-2 bg-amber-100 text-amber-700 hover:bg-amber-100 border-0 rounded-full">
-                        {product.category}
-                      </Badge>
-                      <h3 className="font-semibold text-[#3E2723] mb-2 line-clamp-1">{product.name}</h3>
-                      <p className="text-sm text-[#5D4037]/70 mb-3 line-clamp-2">{product.description}</p>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xl font-bold text-amber-600">${product.price}</span>
-                        <span className={`text-xs px-2 py-1 rounded-full ${product.stockQuantity > 0 ? (product.stockQuantity < 10 ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600') : 'bg-red-100 text-red-600'}`}>
-                          {product.stockQuantity > 0 ? (product.stockQuantity < 10 ? `Low Stock: ${product.stockQuantity}` : `Stock: ${product.stockQuantity}`) : 'Out of Stock'}
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-
-            {!loading && products.length === 0 && (
-              <div className="text-center py-16 bg-white rounded-xl shadow-md">
-                <Package className="h-16 w-16 mx-auto text-gray-300 mb-4" />
-                <h2 className="text-2xl font-bold text-gray-600 mb-2">No database products</h2>
-                <p className="text-gray-400 mb-6">Click "Add New Product" to create your first product</p>
-              </div>
+                        <h3 className="font-semibold text-[#3E2723] mb-2 line-clamp-1">{product.name}</h3>
+                        <p className="text-sm text-[#5D4037]/70 mb-3 line-clamp-2">{product.description}</p>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xl font-bold text-amber-600">${product.price}</span>
+                          <span className={`text-xs px-2 py-1 rounded-full ${product.stockQuantity > 0 ? (product.stockQuantity < 10 ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600') : 'bg-red-100 text-red-600'}`}>
+                            {product.stockQuantity > 0 ? (product.stockQuantity < 10 ? `Low Stock: ${product.stockQuantity}` : `Stock: ${product.stockQuantity}`) : 'Out of Stock'}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+                
+                {/* Database Products Pagination */}
+                <Pagination 
+                  currentPage={dbCurrentPage}
+                  totalPages={dbTotalPages}
+                  onPageChange={setDbCurrentPage}
+                />
+                
+                {products.length === 0 && (
+                  <div className="text-center py-16 bg-white rounded-xl shadow-md">
+                    <Package className="h-16 w-16 mx-auto text-gray-300 mb-4" />
+                    <h2 className="text-2xl font-bold text-gray-600 mb-2">No database products</h2>
+                    <p className="text-gray-400 mb-6">Click "Add New Product" to create your first product</p>
+                  </div>
+                )}
+              </>
             )}
           </TabsContent>
 
           {/* Local Products Tab */}
           <TabsContent value="local">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {localProducts.map((product) => (
+              {getPaginatedLocalProducts().map((product) => (
                 <Card key={product._id} className="group border-0 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden rounded-2xl">
                   <div className="relative overflow-hidden bg-gradient-to-br from-amber-50 to-white">
                     <div className="aspect-square overflow-hidden">
@@ -808,7 +915,14 @@ const AdminDashboard = () => {
                 </Card>
               ))}
             </div>
-
+            
+            {/* Local Products Pagination */}
+            <Pagination 
+              currentPage={localCurrentPage}
+              totalPages={localTotalPages}
+              onPageChange={setLocalCurrentPage}
+            />
+            
             {localProducts.length === 0 && (
               <div className="text-center py-16 bg-white rounded-xl shadow-md">
                 <Image className="h-16 w-16 mx-auto text-gray-300 mb-4" />

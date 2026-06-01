@@ -77,9 +77,33 @@ const isLocalProductDeleted = (productId: string): boolean => {
   return getDeletedLocalProductIds().includes(productId);
 };
 
-// Function to get local image URL
+// Fallback image (local SVG to avoid external requests)
+const FALLBACK_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='500' height='500' viewBox='0 0 500 500'%3E%3Crect width='500' height='500' fill='%23f3f4f6'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%239ca3af' font-size='14'%3ENo Image%3C/text%3E%3C/svg%3E";
+
+// Function to get local image URL with better error handling
 export const getLocalImageUrl = (imageName: string) => {
-  return new URL(`../assets/${imageName}.jpeg`, import.meta.url).href;
+  try {
+    // List of supported extensions to try
+    const extensions = ['.jpeg', '.jpg', '.png', '.webp'];
+    
+    // Try to find the image with different extensions
+    for (const ext of extensions) {
+      try {
+        const url = new URL(`../assets/${imageName}${ext}`, import.meta.url).href;
+        // If we get here, the import worked
+        return url;
+      } catch (e) {
+        // Continue to next extension
+      }
+    }
+    
+    // If no extension worked, try .jpeg as default
+    const url = new URL(`../assets/${imageName}.jpeg`, import.meta.url).href;
+    return url;
+  } catch (error) {
+    console.warn(`Could not load image: ${imageName}`, error);
+    return FALLBACK_IMAGE;
+  }
 };
 
 // Generate all local products (excluding deleted ones)
