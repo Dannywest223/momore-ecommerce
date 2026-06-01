@@ -188,7 +188,8 @@ app.use('/api/contact', contactRoutes);
 app.use('/api/orders', orderRoutes);
 
 // ✅ ADD THIS: 404 handler for unknown routes
-app.use('*', (req, res) => {
+// ✅ FIXED: 404 handler for unknown routes
+app.use((req, res) => {
   res.status(404).json({
     error: 'Route not found',
     message: `Cannot ${req.method} ${req.originalUrl}`,
