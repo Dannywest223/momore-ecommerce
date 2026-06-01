@@ -184,14 +184,7 @@ const HeroCarousel = () => {
       </div>
 
       {/* Scroll Indicator */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 translate-y-12 z-30 hidden md:block">
-        <div className="flex flex-col items-center gap-2">
-          <span className="text-white/60 text-xs tracking-wider uppercase">Scroll</span>
-          <div className="w-5 h-8 border-2 border-white/30 rounded-full flex justify-center">
-            <div className="w-1 h-2 bg-white/50 rounded-full mt-1.5 animate-scroll-bounce"></div>
-          </div>
-        </div>
-      </div>
+      
 
       {/* Add custom animation keyframes */}
       <style>{`

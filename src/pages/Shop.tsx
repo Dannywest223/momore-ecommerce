@@ -11,9 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { productsAPI, wishlistAPI } from "@/lib/api";
+import { productsAPI, wishlistAPI, getLocalImageUrl } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { useSocket } from "@/contexts/SocketContext";
 import { useToast } from "@/hooks/use-toast";
 
 const categories = ["All Categories", "Clothing", "Bags & Accessories", "Homeware", "Art & Decor", "Beauty Products", "Jewelry"];
@@ -29,11 +28,9 @@ const Shop = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const { socket } = useSocket();
   const { toast } = useToast();
   const itemsPerPage = 12;
 
-  // Get category and search query from URL
   useEffect(() => {
     const categoryParam = searchParams.get("category");
     const searchQuery = searchParams.get("search");
@@ -41,7 +38,6 @@ const Shop = () => {
     if (categoryParam) {
       setSelectedCategory(categoryParam);
     }
-    
     if (searchQuery) {
       setSearchTerm(searchQuery);
     }
@@ -56,34 +52,24 @@ const Shop = () => {
     fetchProducts();
   }, [currentPage]);
 
-  useEffect(() => {
-    if (socket) {
-      socket.on('productAdded', () => fetchProducts());
-      socket.on('productUpdated', () => fetchProducts());
-      socket.on('productDeleted', () => fetchProducts());
-
-      return () => {
-        socket.off('productAdded');
-        socket.off('productUpdated');
-        socket.off('productDeleted');
-      };
-    }
-  }, [socket]);
-
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const params = {
+      const params: any = {
         category: selectedCategory !== "All Categories" ? selectedCategory : undefined,
         search: searchTerm || undefined,
         page: currentPage,
         limit: itemsPerPage,
       };
       
+      if (sortBy !== 'featured') {
+        params.sort = sortBy;
+      }
+      
       const response = await productsAPI.getAll(params);
       let fetchedProducts = response.data.products || [];
-
-      // Sort products
+      
+      // Sort locally if needed
       if (sortBy === 'price-low') {
         fetchedProducts.sort((a, b) => a.price - b.price);
       } else if (sortBy === 'price-high') {
@@ -91,7 +77,7 @@ const Shop = () => {
       } else if (sortBy === 'name') {
         fetchedProducts.sort((a, b) => a.name.localeCompare(b.name));
       }
-
+      
       setProducts(fetchedProducts);
       setTotalPages(Math.ceil((response.data.total || fetchedProducts.length) / itemsPerPage));
     } catch (error) {
@@ -134,10 +120,11 @@ const Shop = () => {
   const getImageUrl = (imagePath: string) => {
     if (!imagePath) return "https://via.placeholder.com/400x400?text=No+Image";
     if (imagePath.startsWith('http')) return imagePath;
-    return `https://momorebackend.onrender.com${imagePath}`;
+    if (imagePath.startsWith('data:')) return imagePath;
+    if (imagePath.startsWith('/src/assets/') || imagePath.includes('blob:')) return imagePath;
+    return imagePath;
   };
 
-  // Pagination controls
   const goToPage = (page: number) => {
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -145,7 +132,7 @@ const Shop = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-amber-50/30">
-      {/* Hero Section - Brown Theme */}
+      {/* Hero Section */}
       <section className="relative bg-gradient-to-r from-[#3E2723] via-[#4E342E] to-[#3E2723] py-20 overflow-hidden">
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1920')] bg-cover bg-center opacity-10"></div>
         <div className="container mx-auto px-4 text-center relative z-10">
@@ -153,17 +140,15 @@ const Shop = () => {
             <Sparkles className="h-4 w-4 text-amber-300" />
             <span className="text-amber-100 text-sm font-medium">COLLECTION</span>
           </div>
-          <h1 className="text-5xl md:text-6xl font-bold text-white mb-6 animate-fade-in">
-            Shop Collection
-          </h1>
+          <h1 className="text-5xl md:text-6xl font-bold text-white mb-6">Shop Collection</h1>
           <div className="w-24 h-1 bg-gradient-to-r from-amber-400 to-amber-500 mx-auto mb-6 rounded-full"></div>
-          <p className="text-xl text-amber-100 max-w-2xl mx-auto animate-slide-up">
+          <p className="text-xl text-amber-100 max-w-2xl mx-auto">
             Discover our curated selection of premium products
           </p>
         </div>
       </section>
 
-      {/* Filters and Search - Brown Theme */}
+      {/* Filters */}
       <section className="py-6 border-b border-amber-100 bg-white shadow-sm sticky top-16 z-40">
         <div className="container mx-auto px-4">
           <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
@@ -174,16 +159,16 @@ const Shop = () => {
                   placeholder="Search products..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-white border-amber-200 text-gray-800 placeholder:text-gray-400 focus:border-amber-500 focus:ring-amber-500"
+                  className="pl-10 bg-white border-amber-200 focus:border-amber-500 focus:ring-amber-500"
                 />
               </div>
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="w-full sm:w-48 bg-white border-amber-200 text-gray-800">
+                <SelectTrigger className="w-full sm:w-48 bg-white border-amber-200">
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
-                <SelectContent className="bg-white border-amber-200">
+                <SelectContent>
                   {categories.map((category) => (
-                    <SelectItem key={category} value={category} className="hover:bg-amber-50 focus:bg-amber-50">
+                    <SelectItem key={category} value={category}>
                       {category}
                     </SelectItem>
                   ))}
@@ -193,14 +178,14 @@ const Shop = () => {
             
             <div className="flex gap-4 w-full lg:w-auto">
               <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-full sm:w-48 bg-white border-amber-200 text-gray-800">
+                <SelectTrigger className="w-full sm:w-48 bg-white border-amber-200">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
-                <SelectContent className="bg-white border-amber-200">
-                  <SelectItem value="featured" className="hover:bg-amber-50">Featured</SelectItem>
-                  <SelectItem value="price-low" className="hover:bg-amber-50">Price: Low to High</SelectItem>
-                  <SelectItem value="price-high" className="hover:bg-amber-50">Price: High to Low</SelectItem>
-                  <SelectItem value="name" className="hover:bg-amber-50">Name</SelectItem>
+                <SelectContent>
+                  <SelectItem value="featured">Featured</SelectItem>
+                  <SelectItem value="price-low">Price: Low to High</SelectItem>
+                  <SelectItem value="price-high">Price: High to Low</SelectItem>
+                  <SelectItem value="name">Name</SelectItem>
                 </SelectContent>
               </Select>
               
@@ -209,7 +194,7 @@ const Shop = () => {
                   variant={viewMode === "grid" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setViewMode("grid")}
-                  className={viewMode === "grid" ? "bg-gradient-to-r from-amber-600 to-amber-700 text-white" : "text-amber-600 hover:text-amber-700"}
+                  className={viewMode === "grid" ? "bg-gradient-to-r from-amber-600 to-amber-700 text-white" : "text-amber-600"}
                 >
                   <Grid className="h-4 w-4" />
                 </Button>
@@ -217,7 +202,7 @@ const Shop = () => {
                   variant={viewMode === "list" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setViewMode("list")}
-                  className={viewMode === "list" ? "bg-gradient-to-r from-amber-600 to-amber-700 text-white" : "text-amber-600 hover:text-amber-700"}
+                  className={viewMode === "list" ? "bg-gradient-to-r from-amber-600 to-amber-700 text-white" : "text-amber-600"}
                 >
                   <List className="h-4 w-4" />
                 </Button>
@@ -227,7 +212,7 @@ const Shop = () => {
         </div>
       </section>
 
-      {/* Products Grid/List */}
+      {/* Products */}
       <section className="py-12">
         <div className="container mx-auto px-4">
           {loading ? (
@@ -237,23 +222,19 @@ const Shop = () => {
             </div>
           ) : (
             <>
-              <div className={
-                viewMode === "grid" 
-                  ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-                  : "space-y-4"
+              <div className={viewMode === "grid" 
+                ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+                : "space-y-4"
               }>
-                {products.map((product, index) => (
+                {products.map((product) => (
                   viewMode === "grid" ? (
-                    <Card
-                      key={product._id}
-                      className="group bg-white border border-amber-100 hover:shadow-xl transition-all duration-300 overflow-hidden rounded-xl hover:-translate-y-1"
-                    >
-                      <div className="relative overflow-hidden bg-gradient-to-br from-amber-50 to-white">
+                    <Card key={product._id} className="group bg-white border border-amber-100 hover:shadow-xl transition-all duration-300 overflow-hidden rounded-xl hover:-translate-y-1">
+                      <div className="relative overflow-hidden bg-gradient-to-br from-amber-50 to-white aspect-square">
                         <Link to={`/product/${product._id}`}>
                           <img
                             src={getImageUrl(product.images?.[0])}
                             alt={product.name}
-                            className="w-full h-64 object-cover transition-transform duration-700 group-hover:scale-110"
+                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                             onError={(e) => {
                               (e.target as HTMLImageElement).src = "https://via.placeholder.com/400x400?text=Product";
                             }}
@@ -294,11 +275,7 @@ const Shop = () => {
                       </CardContent>
                     </Card>
                   ) : (
-                    // List View
-                    <div
-                      key={product._id}
-                      className="flex flex-col sm:flex-row gap-4 bg-white rounded-xl p-4 border border-amber-100 hover:shadow-lg transition-all duration-300"
-                    >
+                    <div key={product._id} className="flex flex-col sm:flex-row gap-4 bg-white rounded-xl p-4 border border-amber-100 hover:shadow-lg transition-all duration-300">
                       <Link to={`/product/${product._id}`} className="sm:w-40 h-40 flex-shrink-0">
                         <img
                           src={getImageUrl(product.images?.[0])}
@@ -319,17 +296,15 @@ const Shop = () => {
                         <p className="text-gray-500 text-sm mb-3 line-clamp-2">{product.description}</p>
                         <div className="flex items-center justify-between mt-auto">
                           <p className="text-2xl font-bold text-amber-600">${product.price}</p>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleAddToWishlist(product._id)}
-                              className="border-amber-200 text-amber-600 hover:bg-amber-50 rounded-full"
-                            >
-                              <Heart className="h-4 w-4 mr-2" />
-                              Wishlist
-                            </Button>
-                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleAddToWishlist(product._id)}
+                            className="border-amber-200 text-amber-600 hover:bg-amber-50 rounded-full"
+                          >
+                            <Heart className="h-4 w-4 mr-2" />
+                            Wishlist
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -337,9 +312,9 @@ const Shop = () => {
                 ))}
               </div>
 
-              {/* Pagination - Brown Theme */}
+              {/* Pagination */}
               {totalPages > 1 && (
-                <div className="flex justify-center items-center gap-2 mt-12">
+                <div className="flex justify-center items-center gap-2 mt-12 flex-wrap">
                   <Button
                     variant="outline"
                     onClick={() => goToPage(currentPage - 1)}
@@ -350,7 +325,7 @@ const Shop = () => {
                     Previous
                   </Button>
                   
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                       let pageNum;
                       if (totalPages <= 5) {
@@ -396,7 +371,7 @@ const Shop = () => {
           {!loading && products.length === 0 && (
             <div className="text-center py-16">
               <div className="text-6xl mb-4">🔍</div>
-              <p className="text-xl text-gray-500 mb-2">No products found matching your criteria.</p>
+              <p className="text-xl text-gray-500 mb-2">No products found</p>
               <p className="text-gray-400">Try adjusting your search or filter settings</p>
               <Button 
                 onClick={() => {
