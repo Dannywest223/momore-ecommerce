@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { productsAPI, cartAPI, wishlistAPI } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useCartCount, useWishlistCount } from "@/hooks/useCartCount";
 
 const ProductView = () => {
   const { id } = useParams();
@@ -19,6 +20,8 @@ const ProductView = () => {
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
+  const { refreshCartCount } = useCartCount();
+  const { refreshWishlistCount } = useWishlistCount();
 
   useEffect(() => {
     if (id) {
@@ -73,6 +76,8 @@ const ProductView = () => {
     setCartLoading(true);
     try {
       await cartAPI.add(product._id, quantity);
+      // Refresh the cart count in the header
+      await refreshCartCount();
       toast({
         title: "Added to Cart!",
         description: `${quantity} x ${product.name} added to your cart`,
@@ -106,6 +111,8 @@ const ProductView = () => {
       if (isInWishlist) {
         await wishlistAPI.remove(product._id);
         setIsInWishlist(false);
+        // Refresh the wishlist count in the header
+        await refreshWishlistCount();
         toast({
           title: "Removed from Wishlist",
           description: `${product.name} removed from your wishlist`,
@@ -113,6 +120,8 @@ const ProductView = () => {
       } else {
         await wishlistAPI.add(product._id);
         setIsInWishlist(true);
+        // Refresh the wishlist count in the header
+        await refreshWishlistCount();
         toast({
           title: "Added to Wishlist",
           description: `${product.name} added to your wishlist`,

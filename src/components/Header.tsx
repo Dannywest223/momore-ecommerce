@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Menu, X, Heart, ShoppingBag, User, LogOut, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,14 +10,23 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import SearchBar from "@/components/SearchBar";
+import { useCartCount, useWishlistCount } from "@/hooks/useCartCount";
 import logoImage from "../assets/export.png";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { cartCount, refreshCartCount } = useCartCount();
+  const { wishlistCount, refreshWishlistCount } = useWishlistCount();
 
   const isActive = (path: string) => location.pathname === path;
+
+  // Refresh counts when user logs in/out or after actions
+  useEffect(() => {
+    refreshCartCount();
+    refreshWishlistCount();
+  }, [user]);
 
   const navigationLinks = [
     { name: "Home", path: "/" },
@@ -47,7 +56,7 @@ const Header = () => {
         <div className="container mx-auto px-4 py-3">
           {/* Row 1: Logo + Navigation + Icons */}
           <div className="flex items-center justify-between gap-4">
-            {/* Logo - LARGE with MOMORE TEXT */}
+            {/* Logo */}
             <Link to="/" className="flex items-center gap-3 flex-shrink-0">
               <img
                 src={logoImage}
@@ -79,31 +88,44 @@ const Header = () => {
               ))}
             </div>
 
-            {/* Search Bar - Desktop (inline) */}
+            {/* Search Bar - Desktop */}
             <div className="hidden lg:block flex-1 max-w-md mx-4">
               <SearchBar />
             </div>
 
-            {/* Desktop Icons */}
+            {/* Desktop Icons with Counters */}
             <div className="hidden lg:flex items-center gap-2">
+              {/* Wishlist Icon with Counter */}
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="text-amber-100 hover:text-amber-300 hover:bg-amber-800/50 rounded-full"
+                className="text-amber-100 hover:text-amber-300 hover:bg-amber-800/50 rounded-full relative"
                 asChild
               >
                 <Link to="/wishlist">
                   <Heart className="h-5 w-5" />
+                  {wishlistCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center shadow-md">
+                      {wishlistCount > 99 ? '99+' : wishlistCount}
+                    </span>
+                  )}
                 </Link>
               </Button>
+
+              {/* Cart Icon with Counter */}
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="text-amber-100 hover:text-amber-300 hover:bg-amber-800/50 rounded-full"
+                className="text-amber-100 hover:text-amber-300 hover:bg-amber-800/50 rounded-full relative"
                 asChild
               >
                 <Link to="/cart">
                   <ShoppingBag className="h-5 w-5" />
+                  {cartCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center shadow-md">
+                      {cartCount > 99 ? '99+' : cartCount}
+                    </span>
+                  )}
                 </Link>
               </Button>
               
@@ -161,7 +183,7 @@ const Header = () => {
             <SearchBar />
           </div>
 
-          {/* Mobile Navigation Menu */}
+          {/* Mobile Navigation Menu with Counters */}
           {isMenuOpen && (
             <div className="lg:hidden mt-4 pb-4 border-t border-amber-800/50">
               <div className="flex flex-col space-y-3 pt-4">
@@ -180,11 +202,21 @@ const Header = () => {
                   </Link>
                 ))}
                 <div className="flex items-center gap-6 pt-3 border-t border-amber-800/50">
-                  <Link to="/wishlist" className="text-amber-100 hover:text-amber-300" onClick={() => setIsMenuOpen(false)}>
+                  <Link to="/wishlist" className="text-amber-100 hover:text-amber-300 relative" onClick={() => setIsMenuOpen(false)}>
                     <Heart className="h-5 w-5" />
+                    {wishlistCount > 0 && (
+                      <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center">
+                        {wishlistCount > 99 ? '99+' : wishlistCount}
+                      </span>
+                    )}
                   </Link>
-                  <Link to="/cart" className="text-amber-100 hover:text-amber-300" onClick={() => setIsMenuOpen(false)}>
+                  <Link to="/cart" className="text-amber-100 hover:text-amber-300 relative" onClick={() => setIsMenuOpen(false)}>
                     <ShoppingBag className="h-5 w-5" />
+                    {cartCount > 0 && (
+                      <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center">
+                        {cartCount > 99 ? '99+' : cartCount}
+                      </span>
+                    )}
                   </Link>
                   {!user && (
                     <Link to="/admin" className="text-amber-100 hover:text-amber-300" onClick={() => setIsMenuOpen(false)}>

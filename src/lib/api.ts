@@ -28,7 +28,6 @@ api.interceptors.response.use(
 );
 
 // ============ LOCAL PRODUCTS FROM YOUR ASSETS FOLDER ============
-// Image names: a.jpeg, b.jpeg, c.jpeg ... z.jpeg, aa.jpeg, bb.jpeg ... ii.jpeg
 const localImageNames = [
   'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
   'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
@@ -55,15 +54,39 @@ const localDescriptions = {
   'Jewelry': 'Complete your look with our stunning handcrafted jewelry collection.'
 };
 
-// Function to get local image URL (works with Vite)
+// Store deleted local products in localStorage (temporary deletion)
+const DELETED_LOCAL_PRODUCTS_KEY = 'deleted_local_products';
+
+// Get deleted local product IDs
+const getDeletedLocalProductIds = (): string[] => {
+  const stored = localStorage.getItem(DELETED_LOCAL_PRODUCTS_KEY);
+  return stored ? JSON.parse(stored) : [];
+};
+
+// Save deleted local product ID
+export const deleteLocalProduct = (productId: string) => {
+  const deleted = getDeletedLocalProductIds();
+  if (!deleted.includes(productId)) {
+    deleted.push(productId);
+    localStorage.setItem(DELETED_LOCAL_PRODUCTS_KEY, JSON.stringify(deleted));
+  }
+};
+
+// Check if local product is deleted
+const isLocalProductDeleted = (productId: string): boolean => {
+  return getDeletedLocalProductIds().includes(productId);
+};
+
+// Function to get local image URL
 export const getLocalImageUrl = (imageName: string) => {
-  // This tells Vite to include these images in the build
   return new URL(`../assets/${imageName}.jpeg`, import.meta.url).href;
 };
 
-// Generate all local products from your images
+// Generate all local products (excluding deleted ones)
 export const getAllLocalProducts = () => {
-  return localImageNames.map((imageName, index) => {
+  const deletedIds = getDeletedLocalProductIds();
+  
+  const products = localImageNames.map((imageName, index) => {
     const category = localCategories[index % localCategories.length];
     const nameList = localProductNames[category];
     const name = nameList[index % nameList.length];
@@ -84,9 +107,12 @@ export const getAllLocalProducts = () => {
       isLocal: true
     };
   });
+  
+  // Filter out deleted products
+  return products.filter(product => !isLocalProductDeleted(product._id));
 };
 
-// ============ API ENDPOINTS (with local fallback) ============
+// ============ API ENDPOINTS ============
 
 export const authAPI = {
   register: (userData: any) => api.post('/auth/register', userData),
@@ -96,9 +122,9 @@ export const authAPI = {
 };
 
 export const productsAPI = {
-  // Get all products - combines local + database
+  // Get all products - local + database
   getAll: async (params?: any) => {
-    // Always return local products first (so you see them immediately)
+    // Get local products (excluding deleted ones)
     let localProducts = getAllLocalProducts();
     
     // Apply filters to local products
@@ -131,11 +157,11 @@ export const productsAPI = {
     const start = (page - 1) * limit;
     const paginated = filteredLocal.slice(start, start + limit);
     
-    // Try to fetch from database in background and merge (optional)
+    // Try to fetch from database
     try {
       const response = await api.get('/products', { params });
       if (response.data.products && response.data.products.length > 0) {
-        // Merge database products with local ones (avoid duplicates)
+        // Merge database products (exclude any that might conflict)
         const dbProducts = response.data.products.filter(
           (dbp: any) => !filteredLocal.some((lp: any) => lp._id === dbp._id)
         );
@@ -189,15 +215,12 @@ export const productsAPI = {
   },
   
   getFeatured: async () => {
-    // Get featured from local
     const localProducts = getAllLocalProducts();
     const featuredLocal = localProducts.filter(p => p.featured);
     
-    // Try to get from database too
     try {
       const response = await api.get('/products/featured/list');
       if (response.data && response.data.length > 0) {
-        // Merge with local featured (avoid duplicates)
         const dbFeatured = response.data.filter(
           (dbp: any) => !featuredLocal.some((lp: any) => lp._id === dbp._id)
         );
@@ -218,7 +241,16 @@ export const productsAPI = {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
   
-  delete: (id: string) => api.delete(`/products/${id}`),
+  delete: async (id: string) => {
+    // Check if it's a local product
+    if (id.startsWith('local_')) {
+      // Delete from localStorage (temporary)
+      deleteLocalProduct(id);
+      return { data: { success: true, message: 'Local product deleted' } };
+    }
+    // Delete from database
+    return await api.delete(`/products/${id}`);
+  },
 };
 
 export const cartAPI = {

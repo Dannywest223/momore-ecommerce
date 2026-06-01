@@ -14,6 +14,7 @@ import {
 import { productsAPI, wishlistAPI, getLocalImageUrl } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { useWishlistCount } from "@/hooks/useCartCount";
 
 const categories = ["All Categories", "Clothing", "Bags & Accessories", "Homeware", "Art & Decor", "Beauty Products", "Jewelry"];
 
@@ -26,9 +27,11 @@ const Shop = () => {
   const [viewMode, setViewMode] = useState("grid");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [wishlistLoading, setWishlistLoading] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { refreshWishlistCount } = useWishlistCount();
   const itemsPerPage = 12;
 
   useEffect(() => {
@@ -102,8 +105,13 @@ const Shop = () => {
       return;
     }
 
+    if (wishlistLoading === productId) return;
+    
+    setWishlistLoading(productId);
     try {
       await wishlistAPI.add(productId);
+      // Refresh the wishlist count in the header
+      await refreshWishlistCount();
       toast({
         title: "Added to Wishlist",
         description: "Product added to your wishlist successfully",
@@ -114,6 +122,8 @@ const Shop = () => {
         description: "Failed to add product to wishlist",
         variant: "destructive",
       });
+    } finally {
+      setWishlistLoading(null);
     }
   };
 
@@ -246,8 +256,13 @@ const Shop = () => {
                             size="icon"
                             className="bg-white/90 text-amber-600 hover:bg-amber-600 hover:text-white rounded-full shadow-md"
                             onClick={() => handleAddToWishlist(product._id)}
+                            disabled={wishlistLoading === product._id}
                           >
-                            <Heart className="h-4 w-4" />
+                            {wishlistLoading === product._id ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                            ) : (
+                              <Heart className="h-4 w-4" />
+                            )}
                           </Button>
                         </div>
                         {product.featured && (
@@ -300,9 +315,14 @@ const Shop = () => {
                             variant="outline"
                             size="sm"
                             onClick={() => handleAddToWishlist(product._id)}
+                            disabled={wishlistLoading === product._id}
                             className="border-amber-200 text-amber-600 hover:bg-amber-50 rounded-full"
                           >
-                            <Heart className="h-4 w-4 mr-2" />
+                            {wishlistLoading === product._id ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                            ) : (
+                              <Heart className="h-4 w-4 mr-2" />
+                            )}
                             Wishlist
                           </Button>
                         </div>
