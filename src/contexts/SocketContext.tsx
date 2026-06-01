@@ -15,7 +15,14 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    const newSocket = io('http://localhost:5000');
+    // ✅ FIXED: Use environment variable instead of hardcoded localhost
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'https://momorebackend.onrender.com';
+    
+    const newSocket = io(SOCKET_URL, {
+      withCredentials: true,
+      transports: ['websocket', 'polling'],
+    });
+    
     setSocket(newSocket);
 
     return () => {

@@ -108,7 +108,7 @@ const SearchBar = () => {
                 <img
                   src={product.images[0]?.startsWith('http') 
                     ? product.images[0] 
-                    : `http://localhost:5000${product.images[0]}`
+                    : `https://momorebackend.onrender.com${product.images[0]}`
                   }
                   alt={product.name}
                   className="w-12 h-12 object-cover rounded"

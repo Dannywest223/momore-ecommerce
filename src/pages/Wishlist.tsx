@@ -92,7 +92,7 @@ const Wishlist = () => {
     if (!imagePath) return "https://via.placeholder.com/200x200?text=No+Image";
     if (imagePath.startsWith('http')) return imagePath;
     if (imagePath.startsWith('data:')) return imagePath;
-    return `http://localhost:5000${imagePath}`;
+    return `https://momorebackend.onrender.com${imagePath}`;
   };
 
   if (!user) {

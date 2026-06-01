@@ -86,7 +86,7 @@ const Cart = () => {
   const getImageUrl = (imagePath: string) => {
     if (!imagePath) return "https://via.placeholder.com/80x80?text=No+Image";
     if (imagePath.startsWith('http')) return imagePath;
-    return `http://localhost:5000${imagePath}`;
+    return `https://momorebackend.onrender.com${imagePath}`;
   };
 
   if (!user) {
