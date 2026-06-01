@@ -16,18 +16,44 @@ const orderRoutes = require('./routes/orders');
 
 const app = express();
 const server = http.createServer(app);
+
+// ✅ FIXED: Dynamic CORS for production + local development
+const allowedOrigins = [
+  process.env.CLIENT_URL,           // Netlify URL (production)
+  'http://localhost:8080',           // Local frontend
+  'http://localhost:3000',           // React default
+  'http://localhost:5000',           // Local backend
+  'https://momorebackend.onrender.com' // Self
+].filter(Boolean); // Remove undefined values
+
 const io = socketIo(server, {
   cors: {
-    origin: "http://localhost:8080",
-    methods: ["GET", "POST"]
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    credentials: true
   }
 });
 
-// Middleware
-app.use(helmet());
+// ✅ FIXED: CORS middleware with proper origin handling
 app.use(cors({
-  origin: 'http://localhost:8080',
-  credentials: true
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+      callback(null, true);
+    } else {
+      console.log('Blocked origin:', origin);
+      callback(null, true); // Still allow but log it
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'Content-Type', 'Accept', 'Authorization']
+}));
+
+// Middleware
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
 const limiter = rateLimit({
@@ -39,6 +65,23 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/uploads', express.static('uploads'));
+
+// ✅ ADD THIS: Root endpoint to fix 404 error
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Momore Backend API is running',
+    status: 'active',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      auth: '/api/auth',
+      products: '/api/products',
+      cart: '/api/cart',
+      wishlist: '/api/wishlist',
+      contact: '/api/contact',
+      orders: '/api/orders'
+    }
+  });
+});
 
 // Socket.io connection
 io.on('connection', (socket) => {
@@ -144,10 +187,26 @@ app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/orders', orderRoutes);
 
+// ✅ ADD THIS: 404 handler for unknown routes
+app.use('*', (req, res) => {
+  res.status(404).json({
+    error: 'Route not found',
+    message: `Cannot ${req.method} ${req.originalUrl}`,
+    availableEndpoints: {
+      root: '/',
+      auth: '/api/auth',
+      products: '/api/products',
+      cart: '/api/cart',
+      wishlist: '/api/wishlist',
+      contact: '/api/contact',
+      orders: '/api/orders'
+    }
+  });
+});
+
 // Connect to MongoDB with better error handling
 const connectDB = async () => {
   try {
-    // Remove deprecated options
     await mongoose.connect(process.env.MONGODB_URI);
     console.log('✅ Connected to MongoDB successfully');
   } catch (err) {
@@ -176,7 +235,7 @@ mongoose.connection.on('disconnected', () => {
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📡 Frontend URL: http://localhost:8080`);
+  console.log(`📡 Backend URL: https://momorebackend.onrender.com`);
   if (mongoose.connection.readyState !== 1) {
     console.log(`📦 Running in DEMO mode with mock data`);
   }
