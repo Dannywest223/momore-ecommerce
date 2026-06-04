@@ -83,21 +83,6 @@ const FALLBACK_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/
 // Function to get local image URL with better error handling
 export const getLocalImageUrl = (imageName: string) => {
   try {
-    // List of supported extensions to try
-    const extensions = ['.jpeg', '.jpg', '.png', '.webp'];
-    
-    // Try to find the image with different extensions
-    for (const ext of extensions) {
-      try {
-        const url = new URL(`../assets/${imageName}${ext}`, import.meta.url).href;
-        // If we get here, the import worked
-        return url;
-      } catch (e) {
-        // Continue to next extension
-      }
-    }
-    
-    // If no extension worked, try .jpeg as default
     const url = new URL(`../assets/${imageName}.jpeg`, import.meta.url).href;
     return url;
   } catch (error) {
@@ -106,7 +91,7 @@ export const getLocalImageUrl = (imageName: string) => {
   }
 };
 
-// Generate all local products (excluding deleted ones)
+// Generate all local products (excluding deleted ones) - PRICE = 0.00
 export const getAllLocalProducts = () => {
   const deletedIds = getDeletedLocalProductIds();
   
@@ -114,7 +99,7 @@ export const getAllLocalProducts = () => {
     const category = localCategories[index % localCategories.length];
     const nameList = localProductNames[category];
     const name = nameList[index % nameList.length];
-    const price = Math.floor(Math.random() * (199 - 29 + 1) + 29);
+    const price = 0; // ← PRICE SET TO 0
     const featured = index < 8;
     const inStock = true;
     
@@ -122,7 +107,7 @@ export const getAllLocalProducts = () => {
       _id: `local_${imageName}`,
       name: name,
       description: localDescriptions[category] + ` ${name} - handcrafted with care.`,
-      price: price,
+      price: price, // ← 0.00
       category: category,
       images: [getLocalImageUrl(imageName)],
       featured: featured,

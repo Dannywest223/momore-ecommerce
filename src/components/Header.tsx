@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import SearchBar from "@/components/SearchBar";
 import { useCartCount, useWishlistCount } from "@/hooks/useCartCount";
-import logoImage from "../assets/export.png";
+import logoImage from "../assets/logo.jpg";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
